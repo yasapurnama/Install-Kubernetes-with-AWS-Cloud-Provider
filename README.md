@@ -247,7 +247,7 @@ Key | Value
 **# Configure Security Group**
 
 Type | Protocol | Port range | Source | Description - optional
---- | --- | --- | --- | --- | --- 
+--- | --- | --- | --- | ---
 HTTP | TCP | 80 | 0.0.0.0/0 | Protocol HTTP
 HTTPS | TCP | 443 | 0.0.0.0/0 | Protocol HTTPS
 Custom TCP | TCP | 6443 | 0.0.0.0/0 | Kubernetes API Server
@@ -290,7 +290,7 @@ Key | Value
 **# Configure Security Group**
 
 Type | Protocol | Port range | Source | Description - optional
---- | --- | --- | --- | --- | --- 
+--- | --- | --- | --- | ---
 SSH | TCP | 22 | 0.0.0.0/0 | SSH
 HTTP | TCP | 80 | 0.0.0.0/0 | Protocol HTTP
 HTTPS | TCP | 443 | 0.0.0.0/0 | Protocol HTTPS
