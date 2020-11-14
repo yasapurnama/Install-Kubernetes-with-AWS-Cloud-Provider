@@ -315,7 +315,7 @@ hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/local
 
 # install docker
 apt install -y docker.io
-cat > /etc/docker/daemon.json <<EOF
+cat << EOF > /etc/docker/daemon.json
 {
   "exec-opts": ["native.cgroupdriver=systemd"],
   "log-driver": "json-file",
@@ -324,6 +324,7 @@ cat > /etc/docker/daemon.json <<EOF
   },
   "storage-driver": "overlay2"
 }
+EOF
 systemctl stop docker
 systemctl start docker
 systemctl enable docker
