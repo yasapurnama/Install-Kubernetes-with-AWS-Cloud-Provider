@@ -263,7 +263,7 @@ All Traffic | All | All | 10.0.0.0/16 | VPC subnet
 Review all changes then **Launch**
 
 ## Worker Node
-While waiting master node, create new EC2 instane in the same way like the master node but using **k8s-cluster-iam-master-role**
+While waiting master node, create new EC2 instane in the same way like the master node but using **k8s-cluster-iam-worker-rolee**
 
 **# Choosing AMI**
 
@@ -278,7 +278,7 @@ Select **t2.medium**
 Name | Value
 --- | ---
 **Network** | select previously created VPC (Select **K8s-cluster-vpc**)
-**IAM role** | select previously created master role (Select **k8s-cluster-iam-master-role**)
+**IAM role** | select previously created master role (Select **k8s-cluster-iam-worker-role**)
 
 **# Add Tags**
 
@@ -301,6 +301,85 @@ All Traffic | All | All | 10.0.0.0/16 | VPC subnet
 
 Review all changes then **Launch**
 
-# Kubernet Cluster Setup
-## Master Node
+# Config Kubernetes Cluster
+## Master Node Setup
 
+```bash
+sudo su -
+# upgrade & install depedencies
+apt update && apt upgrade -y && apt dist-upgrade -y
+apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg2 net-tools
+
+# set FQDN hostname
+hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/local-hostname)
+
+# install docker
+apt install -y docker.io
+cat > /etc/docker/daemon.json <<EOF
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+systemctl stop docker
+systemctl start docker
+systemctl enable docker
+
+cat <<EOF > /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+sysctl --system
+
+# install kubelet kubeadm kubectl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
+apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+apt update
+apt install -y kubelet kubeadm kubectl
+
+cat << EOF > /etc/kubernetes/aws.yaml
+---
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+networking:
+  serviceSubnet: "10.100.0.0/16"
+  podSubnet: "10.244.0.0/16"
+apiServer:
+  extraArgs:
+    cloud-provider: "aws"
+controllerManager:
+  extraArgs:
+    cloud-provider: "aws"
+EOF
+
+# init cluster
+kubeadm init --config /etc/kubernetes/aws.yaml
+
+```
+**NB**: if you use **Free tier t2.micro**, add argument **--ignore-preflight-errors=NumCPU**
+`kubeadm init --config /etc/kubernetes/aws.yaml --ignore-preflight-errors=NumCPU`
+
+After cluster init, you'll get unique token for worker node to join:
+
+kubeadm join <span style="color:red">10.0.0.119:6443</span> --token <span style="color:red">i4pna1.8tlp6kcmukr5sian</span> --discovery-token-ca-cert-hash <span style="color:red">sha256:c2974f5f46e06df9bddd532ac61617ada82943b09ee914847fd8f15f7b8ff008</span>
+
+save it, we'll use later in worker node
+
+```bash
+# save kube config
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# install Flannel CNI
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+
+kubectl get nodes
+
+```
+
+## Worker Node Setup
