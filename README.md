@@ -361,12 +361,15 @@ EOF
 kubeadm init --config /etc/kubernetes/aws.yaml
 
 ```
-**NB**: if you use **Free tier t2.micro**, add argument **--ignore-preflight-errors=NumCPU**
-`kubeadm init --config /etc/kubernetes/aws.yaml --ignore-preflight-errors=NumCPU`
+**NB**: if use **Free tier t2.micro**, you'll facing minimum CPU issue, add argument **--ignore-preflight-errors=NumCPU** to ignore (masternode need at least 2 core CPU)
 
-After cluster init, you'll get unique token for worker node to join:
+```bash
+kubeadm init --config /etc/kubernetes/aws.yaml --ignore-preflight-errors=NumCPU
+```
 
-kubeadm join <span style="color:red">10.0.0.119:6443</span> --token <span style="color:red">i4pna1.8tlp6kcmukr5sian</span> --discovery-token-ca-cert-hash <span style="color:red">sha256:c2974f5f46e06df9bddd532ac61617ada82943b09ee914847fd8f15f7b8ff008</span>
+After cluster init, you'll get **unique token** for worker node join:
+
+kubeadm join **10.0.0.119:6443** --token **i4pna1.8tlp6kcmukr5sian** --discovery-token-ca-cert-hash **sha256:c2974f5f46e06df9bddd532ac61617ada82943b09ee914847fd8f15f7b8ff008**
 
 save it, we'll use later in worker node
 
@@ -384,3 +387,93 @@ kubectl get nodes
 ```
 
 ## Worker Node Setup
+
+```bash
+sudo su -
+# upgrade & install depedencies
+apt update && apt upgrade -y && apt dist-upgrade -y
+apt install -y apt-transport-https ca-certificates curl software-properties-common gnupg2 net-tools
+
+# set FQDN hostname
+hostnamectl set-hostname $(curl -s http://169.254.169.254/latest/meta-data/local-hostname)
+
+# install docker
+apt install -y docker.io
+cat << EOF > /etc/docker/daemon.json
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+systemctl stop docker
+systemctl start docker
+systemctl enable docker
+
+cat <<EOF > /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+sysctl --system
+
+# install kubelet kubeadm kubectl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
+apt-add-repository "deb http://apt.kubernetes.io/ kubernetes-xenial main"
+apt update
+apt install -y kubelet kubeadm kubectl
+```
+
+Replace `/etc/kubernetes/node.yml` config below with your own:
+
+Token: **"i4pna1.8tlp6kcmukr5sian"**
+
+apiServerEndpoint: **"10.0.0.119:6443"**
+
+caCertHashes: **"sha256:c2974f5f46e06df9bddd532ac61617ada82943b09ee914847fd8f15f7b8ff008"**
+
+name: **ip-10-0-0-186.eu-west-3.compute.internal**
+
+```bash
+cat << EOF > /etc/kubernetes/node.yml
+---
+apiVersion: kubeadm.k8s.io/v1beta1
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    token: "i4pna1.8tlp6kcmukr5sian"
+    apiServerEndpoint: "10.0.0.119:6443"
+    caCertHashes:
+      - "sha256:c2974f5f46e06df9bddd532ac61617ada82943b09ee914847fd8f15f7b8ff008"
+nodeRegistration:
+  name: ip-10-0-0-186.eu-west-3.compute.internal
+  kubeletExtraArgs:
+    cloud-provider: aws
+EOF
+```
+
+```bash
+# join cluster
+kubeadm join --config /etc/kubernetes/node.yml
+
+```
+
+## Check Nodes
+
+Go back to master to check the nodes
+
+```bash
+# check nodes
+kubectl get nodes
+
+```
+
+# References
+[https://rtfm.co.ua/en/kubernetes-part-2-a-cluster-set-up-on-aws-with-aws-cloud-provider-and-aws-loadbalancer/](https://rtfm.co.ua/en/kubernetes-part-2-a-cluster-set-up-on-aws-with-aws-cloud-provider-and-aws-loadbalancer/)
+
+[https://www.linuxtechi.com/install-kubernetes-k8s-on-ubuntu-20-04/](https://www.linuxtechi.com/install-kubernetes-k8s-on-ubuntu-20-04/)
+
+[https://github.com/Kubelancer/Kubernetes-with-AWS-Cloud-Provider-Kubeapps-Wordpress](https://github.com/Kubelancer/Kubernetes-with-AWS-Cloud-Provider-Kubeapps-Wordpress)
